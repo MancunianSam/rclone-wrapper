@@ -8,16 +8,17 @@ import (
   _ "github.com/rclone/rclone/backend/s3"
   "github.com/rclone/rclone/fs"
   "github.com/rclone/rclone/fs/config"
+  "github.com/rclone/rclone/fs/operations"
   "github.com/rclone/rclone/fs/rc"
-  "github.com/rclone/rclone/fs/sync"
   "log"
 )
 
 type TransferEvent struct {
-  Token         string `json:"token"`
-  Bucket        string `json:"bucket"`
-  UserId        string `json:"user_id"`
-  ConsignmentId string `json:"consignment_id"`
+  Token       string `json:"token"`
+  Bucket      string `json:"bucket"`
+  DriveFile   string `json:"driveFolder"`
+  DriveParent string `json:"driveParent"`
+  S3Path      string `json:"s3Path"`
 }
 
 type Response struct {
@@ -36,14 +37,16 @@ func HandleRequest(event TransferEvent) (Response, error) {
   _, awsRemoteErr := config.CreateRemote(ctx, "aws", "s3", s3Params, remoteOpt)
   checkError(awsRemoteErr)
 
-  f, driveRemoteFsErr := fs.NewFs(ctx, "google:/")
+  fsDrive, driveRemoteFsErr := fs.NewFs(ctx, fmt.Sprintf("google:/%s", event.DriveParent))
   checkError(driveRemoteFsErr)
 
-  fa, awsRemoteFsErr := fs.NewFs(ctx, fmt.Sprintf("aws:%s/%s/%s", event.Bucket, event.UserId, event.ConsignmentId))
+  fsAWS, awsRemoteFsErr := fs.NewFs(ctx, fmt.Sprintf("aws:%s/%s", event.Bucket, ""))
   checkError(awsRemoteFsErr)
 
-  syncErr := sync.Sync(ctx, fa, f, true)
-  checkError(syncErr)
+  //Replace this with a call to copy
+  copyErr := operations.CopyFile(ctx, fsAWS, fsDrive, event.S3Path, event.DriveFile)
+
+  checkError(copyErr)
 
   return Response{Message: "ok"}, nil
 }
@@ -55,6 +58,6 @@ func checkError(err error) {
 }
 
 func main() {
-  //HandleRequest(TransferEvent{Token: os.Args[1], ConsignmentId: "9d8524a5-9e2d-4a01-a28f-bd93dcaeda31", UserId: "cb4fa22f-1c08-4b79-b0ab-ab21dea7443e", Bucket: "sam-test-bucket-sandbox"})
+  //HandleRequest(TransferEvent{Token: os.Args[1], S3Path: "testpath", Bucket: "sam-test-bucket-sandbox", DriveParent: "/Test", DriveFile: "Nested/TestDoc.docx"})
   lambda.Start(HandleRequest)
 }

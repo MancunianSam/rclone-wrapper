@@ -19,15 +19,17 @@ type MetadataItems struct {
   Items []Metadata `json:"items"`
 }
 type Metadata struct {
-  Path  string `json:"token"`
-  Name  string `json:"name"`
-  Size  int64  `json:"size"`
-  IsDir bool   `json:"is_dir"`
-  Hash  string `json:"hash"`
+  Path         string `json:"path"`
+  Name         string `json:"name"`
+  Size         int64  `json:"size"`
+  IsDir        bool   `json:"isDir"`
+  Hash         string `json:"hash"`
+  LastModified string `json:"lastModified"`
 }
 
 type MetadataEvent struct {
-  Token string `json:"token"`
+  Token        string `json:"token"`
+  ParentFolder string `json:"parentFolder"`
 }
 
 func checkError(err error) {
@@ -47,18 +49,19 @@ func HandleRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
   _, driveRemoteErr := config.CreateRemote(ctx, "google", "drive", googleParams, remoteOpt)
   checkError(driveRemoteErr)
 
-  fsrc := cmd.NewFsSrc([]string{"google:/Test"})
+  fsrc := cmd.NewFsSrc([]string{fmt.Sprintf("google:/%s", metadataEvent.ParentFolder)})
 
   opts := operations.ListJSONOpt{ShowHash: true, Recurse: true}
   items := MetadataItems{}
 
   err := operations.ListJSON(ctx, fsrc, "", &opts, func(item *operations.ListJSONItem) error {
     metadata := Metadata{
-      Path:  item.Path,
-      Name:  item.Name,
-      Size:  item.Size,
-      IsDir: item.IsDir,
-      Hash:  item.Hashes["md5"],
+      Path:         item.Path,
+      Name:         item.Name,
+      Size:         item.Size,
+      IsDir:        item.IsDir,
+      Hash:         item.Hashes["md5"],
+      LastModified: item.ModTime.Format,
     }
     newItems := append(items.Items, metadata)
     items.Items = newItems
